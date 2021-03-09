@@ -1,25 +1,30 @@
+import csv
+import itertools
+
 import numpy as np
 import pandas as pd
-import scipy.sparse
-from sklearn import model_selection
+from scipy import sparse
+from sklearn.model_selection import train_test_split
 
 
 def load_edges(path):
-    edges = np.loadtxt(path, dtype=int)
-    users = np.unique(edges)
-    users_num = np.max(users) + 1
-    data_mat = sparse.coo_matrix(([1] * len(edges), (edges[:, 0], edges[:, 1])), shape=(users_num, users_num))
-    return data_mat
+    with open(path) as file:
+        reader = csv.reader(file, delimiter="\t")
+        raw_data = [(int(e), int(c)) for e, c in reader]
+        data_shape = (
+            np.max([x for x in (itertools.chain(*raw_data))]) + 1, reader.line_num)  # num of edges, connections
+        data_mat = sparse.coo_matrix(([1] * len(raw_data), list(zip(*raw_data))), shape=(data_shape[0], data_shape[0]))
+    return data_mat.tocsr()
 
 
 def load_checkins(path):
-    names = ["user_id", "check-in time", "latitude", "longitude", "location_id"]
-    checkins_df = pd.read_csv(path, sep="\t", header=None, names=names)
-    users = np.unique(checkins_df.User_ID)
+    checkins_df = pd.read_csv(path, sep="\t", header=None)[[0, 4]]
+    checkins_df.columns = ["user_id", "location_id"]
+    unique_users = np.unique(checkins_df.user_id)
 
-    train_users, test_users = model_selection.train_test_split(users, test_size=0.01, shuffle=True)
+    train_users, test_users = train_test_split(unique_users, test_size=0.01, shuffle=True)
 
-    train = checkins_df.loc[checkins_df['user_id'].isin(train_users)]
-    test = checkins_df.loc[checkins_df['user_id'].isin(test_users)]
+    train = checkins_df.loc[checkins_df.user_id.isin(train_users)]
+    test = checkins_df.loc[checkins_df.user_id.isin(test_users)]
 
     return train, test
